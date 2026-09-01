@@ -9,6 +9,8 @@
       color-scheme: light;
       --bg: #f6f7f9;
       --text: #17202a;
+      --muted: #647084;
+      --line: #d8dee8;
       --accent: #0f766e;
       --accent-dark: #115e59;
     }
@@ -22,15 +24,20 @@
       min-height: 100vh;
       font-family: Arial, Helvetica, sans-serif;
       background: var(--bg);
-      color: var(--text);
       display: grid;
       place-items: center;
       padding: 24px;
     }
 
+    main {
+      width: min(100%, 420px);
+      display: grid;
+      gap: 18px;
+    }
+
     button {
       appearance: none;
-      width: min(100%, 420px);
+      width: 100%;
       min-height: 76px;
       border: 0;
       border-radius: 8px;
@@ -53,27 +60,61 @@
       background: var(--accent-dark);
     }
 
-    .hidden-frame {
-      position: absolute;
-      width: 0;
-      height: 0;
-      border: 0;
-      opacity: 0;
-      pointer-events: none;
+    .progress {
+      width: 100%;
+      display: grid;
+      gap: 8px;
     }
 
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--line);
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: var(--accent);
+      transition: width 180ms ease;
+    }
+
+    .progress-text {
+      min-height: 20px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-  <button id="downloadButton" type="button" disabled>Download</button>
-  <iframe id="downloadFrame" class="hidden-frame" title="download frame" aria-hidden="true"></iframe>
+  <main>
+    <button id="downloadButton" type="button" disabled>Download</button>
+    <div class="progress" aria-hidden="true">
+      <div class="progress-track">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+      <div id="progressText" class="progress-text"></div>
+    </div>
+  </main>
 
   <script>
     const DEFAULT_FILE_NAME = 'download.apk';
 
     const downloadButton = document.querySelector('#downloadButton');
+    const progressBar = document.querySelector('#progressBar');
+    const progressText = document.querySelector('#progressText');
     const pageUrl = new URL(window.location.href);
-    let isServiceWorkerReady = false;
+    const apkUrl = getApkUrlFromQuery();
+    const fileName = getFileNameFromQuery();
+    let downloadBlob = null;
+    let fetchPromise = null;
+    let fetchFailed = false;
+    let clickPending = false;
+    let fakeProgressTimer = null;
+    let fakeProgressValue = 0;
 
     function log(message, data) {
       if (data === undefined) {
@@ -129,93 +170,170 @@
       return sanitizeFileName(pageUrl.searchParams.get('name') || pageUrl.searchParams.get('filename'));
     }
 
-    function waitForController(timeoutMs = 5000) {
-      if (navigator.serviceWorker.controller) {
-        return Promise.resolve();
+    function setProgress(percent, text) {
+      const safePercent = Math.max(0, Math.min(100, percent));
+      progressBar.style.width = `${safePercent}%`;
+      progressText.textContent = text || '';
+    }
+
+    function startFakeProgress() {
+      if (fakeProgressTimer) {
+        return;
       }
 
-      return new Promise((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-          navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
-          reject(new Error('Service worker is active, but does not control this page yet.'));
-        }, timeoutMs);
+      fakeProgressTimer = window.setInterval(() => {
+        fakeProgressValue = Math.min(92, fakeProgressValue + Math.max(0.2, (92 - fakeProgressValue) * 0.025));
+        setProgress(fakeProgressValue, `Preparing ${Math.floor(fakeProgressValue)}%`);
+      }, 300);
+    }
 
-        function onControllerChange() {
-          window.clearTimeout(timeout);
-          resolve();
+    function stopFakeProgress() {
+      if (fakeProgressTimer) {
+        window.clearInterval(fakeProgressTimer);
+        fakeProgressTimer = null;
+      }
+    }
+
+    function handDownloadToBrowser() {
+      if (!downloadBlob) {
+        return;
+      }
+
+      const blobUrl = URL.createObjectURL(downloadBlob);
+      const link = document.createElement('a');
+
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 1000);
+
+      log('download handed to browser');
+    }
+
+    async function readResponseBlob(response) {
+      const contentLength = Number(response.headers.get('content-length'));
+
+      if (!response.body || !Number.isFinite(contentLength) || contentLength <= 0) {
+        startFakeProgress();
+        const blob = await response.blob();
+        stopFakeProgress();
+        setProgress(100, 'Ready');
+        return blob;
+      }
+
+      const reader = response.body.getReader();
+      const chunks = [];
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
         }
 
-        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange, { once: true });
+        chunks.push(value);
+        received += value.byteLength;
+        const percent = Math.round((received / contentLength) * 100);
+        setProgress(percent, `${percent}%`);
+      }
+
+      setProgress(100, 'Ready');
+      return new Blob(chunks, {
+        type: response.headers.get('content-type') || 'application/vnd.android.package-archive',
       });
     }
 
-    async function registerServiceWorker() {
-      if (!('serviceWorker' in navigator)) {
-        throw new Error('Service worker is not supported by this browser.');
-      }
-
-      let registration = await navigator.serviceWorker.getRegistration('./');
-      if (!registration) {
-        log('registering service worker');
-        registration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
-      } else {
-        log('using existing service worker registration');
-        await registration.update();
-      }
-
-      if (registration.waiting) {
-        log('activating waiting service worker');
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-      }
-
-      await navigator.serviceWorker.ready;
-      await waitForController();
-
-      isServiceWorkerReady = true;
-      downloadButton.disabled = !getApkUrlFromQuery();
-      log('service worker is ready');
-      if (downloadButton.disabled) {
-        log('download button disabled because u parameter is missing or invalid');
-      }
-
-      startDownload();
-    }
-
-    function startDownload() {
-      const apkUrl = getApkUrlFromQuery();
+    async function startFetchOnce() {
       if (!apkUrl) {
         log('download URL is missing. Add ?u=https://example.com/app.apk or ?domain=example.com&p=path');
-        return;
+        setProgress(0, '');
+        return null;
       }
 
-      const fileName = getFileNameFromQuery();
-      const target = new URL('./download.apk', window.location.href);
+      if (fetchPromise) {
+        return fetchPromise;
+      }
 
-      target.searchParams.set('src', apkUrl);
-      target.searchParams.set('name', fileName);
+      log('starting single page fetch', { apkUrl, fileName });
+      setProgress(0, 'Preparing');
 
-      log('starting download', { apkUrl, fileName });
-      window.location.href = target.href;
+      fetchPromise = (async () => {
+        const response = await fetch(apkUrl, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'omit',
+          redirect: 'follow',
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        downloadBlob = await readResponseBlob(response);
+        downloadButton.disabled = false;
+        log('file fetched and ready');
+
+        if (clickPending) {
+          clickPending = false;
+          handDownloadToBrowser();
+          window.setTimeout(() => {
+            downloadButton.disabled = false;
+          }, 1000);
+        }
+
+        return downloadBlob;
+      })().catch((error) => {
+        fetchFailed = true;
+        stopFakeProgress();
+        setProgress(0, '');
+        downloadButton.disabled = true;
+        console.error('[download] fetch failed, download canceled', error);
+        return null;
+      });
+
+      return fetchPromise;
+    }
+
+    if (apkUrl) {
+      downloadButton.disabled = false;
+      log('download button enabled');
+      startFetchOnce();
+    } else {
+      log('download button disabled because URL parameters are missing or invalid');
     }
 
     downloadButton.addEventListener('click', () => {
-      if (!isServiceWorkerReady) {
-        log('download requested before service worker readiness');
+      if (!apkUrl || fetchFailed) {
         return;
       }
 
       downloadButton.disabled = true;
-      startDownload();
 
-      window.setTimeout(() => {
-        downloadButton.disabled = false;
-      }, 2500);
+      if (downloadBlob) {
+        handDownloadToBrowser();
+        window.setTimeout(() => {
+          downloadButton.disabled = false;
+        }, 1000);
+        return;
+      }
+
+      clickPending = true;
+      log('download click is waiting for the existing fetch');
+      startFetchOnce();
     });
 
-    registerServiceWorker().catch((error) => {
-      console.error('[download] service worker setup failed', error);
-      downloadButton.disabled = true;
+    startFetchOnce().then((blob) => {
+      if (!blob) return;
+      downloadButton.click();
+      // файл готов
     });
+
+
   </script>
 </body>
 </html>
