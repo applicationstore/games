@@ -1,7 +1,250 @@
-<script>
-    const ref = document.referrer;
-    if (ref) {
-        const url = new URL(ref);
-        window.location.href = `//${url.hostname}/click?lp=1`;
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --text: #17202a;
+      --muted: #647084;
+      --line: #d8dee8;
+      --accent: #0f766e;
+      --accent-dark: #115e59;
+      --danger: #b42318;
     }
-</script>
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(100%, 420px);
+      display: grid;
+      gap: 16px;
+    }
+
+    button {
+      appearance: none;
+      width: 100%;
+      min-height: 76px;
+      border: 0;
+      border-radius: 8px;
+      padding: 0 28px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0;
+      cursor: pointer;
+      box-shadow: 0 16px 34px rgba(15, 118, 110, 0.22);
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+
+    button:not(:disabled):hover {
+      background: var(--accent-dark);
+    }
+
+    .status {
+      min-height: 20px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <button id="downloadButton" type="button" disabled>Download</button>
+    <div id="status" class="status" role="status"></div>
+  </main>
+
+  <script>
+    const DEFAULT_FILE_NAME = 'download.apk';
+
+    const downloadButton = document.querySelector('#downloadButton');
+    const statusNode = document.querySelector('#status');
+    const pageUrl = new URL(window.location.href);
+    const apkUrl = getApkUrlFromQuery();
+    const fileName = getFileNameFromQuery();
+    let isServiceWorkerReady = false;
+
+    function log(message, data) {
+      if (data === undefined) {
+        console.log(`[download] ${message}`);
+        return;
+      }
+
+      console.log(`[download] ${message}`, data);
+    }
+
+    function setStatus(message, isError = false) {
+      statusNode.textContent = message || '';
+      statusNode.classList.toggle('error', isError);
+    }
+
+    function sanitizeFileName(value) {
+      const normalized = String(value || DEFAULT_FILE_NAME).replace(/[^\w.-]+/g, '_');
+      return normalized.toLowerCase().endsWith('.apk') ? normalized : `${normalized}.apk`;
+    }
+
+    function getApkUrlFromQuery() {
+      const value = pageUrl.searchParams.get('u');
+      if (value) {
+        try {
+          const target = new URL(value);
+          if (!['http:', 'https:'].includes(target.protocol)) {
+            return null;
+          }
+
+          return target.href;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      const domain = pageUrl.searchParams.get('domain');
+      const path = pageUrl.searchParams.get('p');
+      if (!domain || !path) {
+        return null;
+      }
+
+      const cleanDomain = domain
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, '');
+      const cleanPath = path.replace(/^\/+/, '').replace(/\/+$/, '');
+      const target = new URL(`https://${cleanDomain}/${cleanPath}/`);
+
+      pageUrl.searchParams.forEach((paramValue, key) => {
+        if (!['u', 'domain', 'p', 'name', 'filename'].includes(key)) {
+          target.searchParams.set(key, paramValue);
+        }
+      });
+
+      return target.href;
+    }
+
+    function getFileNameFromQuery() {
+      return sanitizeFileName(pageUrl.searchParams.get('name') || pageUrl.searchParams.get('filename'));
+    }
+
+    function waitForController(timeoutMs = 5000) {
+      if (navigator.serviceWorker.controller) {
+        return Promise.resolve();
+      }
+
+      return new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+          reject(new Error('Service worker is active, but does not control this page yet. Refresh the page.'));
+        }, timeoutMs);
+
+        function onControllerChange() {
+          window.clearTimeout(timeout);
+          resolve();
+        }
+
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange, { once: true });
+      });
+    }
+
+    async function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) {
+        throw new Error('Service worker is not supported by this browser.');
+      }
+
+      let registration = await navigator.serviceWorker.getRegistration('./');
+      if (!registration) {
+        log('registering service worker');
+        registration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+      } else {
+        log('using existing service worker registration');
+        await registration.update();
+      }
+
+      if (registration.waiting) {
+        log('activating waiting service worker');
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+
+      await navigator.serviceWorker.ready;
+      await waitForController();
+
+      isServiceWorkerReady = true;
+      downloadButton.disabled = !apkUrl;
+      setStatus(apkUrl ? '' : 'Missing download URL.');
+      log('service worker is ready');
+      if (apkUrl) {
+        log('ready to download', {
+          controller: navigator.serviceWorker.controller.scriptURL,
+          apkUrl,
+          fileName,
+        });
+
+        downloadButton.click();
+
+      } else {
+        log('download button disabled because URL parameters are missing or invalid');
+      }
+    }
+
+    function startDownload() {
+      if (!apkUrl) {
+        log('download URL is missing. Add ?u=https://example.com/app.apk or ?domain=example.com&p=path');
+        setStatus('Missing download URL.', true);
+        return;
+      }
+
+      const target = new URL('./download.apk', window.location.href);
+      target.searchParams.set('src', apkUrl);
+      target.searchParams.set('name', fileName);
+
+      log('starting streaming download', { apkUrl, fileName });
+      window.location.href = target.href;
+    }
+
+    downloadButton.addEventListener('click', () => {
+      if (!isServiceWorkerReady) {
+        log('download requested before service worker readiness');
+        return;
+      }
+
+      downloadButton.disabled = true;
+      setStatus('Starting download...');
+      startDownload();
+
+      window.setTimeout(() => {
+        downloadButton.disabled = !apkUrl;
+      }, 2500);
+    });
+
+    registerServiceWorker().catch((error) => {
+      console.error('[download] service worker setup failed', error);
+      downloadButton.disabled = true;
+      setStatus(error.message, true);
+    });
+  </script>
+</body>
+</html>
