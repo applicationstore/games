@@ -93,7 +93,10 @@
 <iframe id="downloadFrame" class="hidden-frame" title="download frame" aria-hidden="true"></iframe>
 
 <script>
-  const DEFAULT_FILE_NAME = 'download.apk';
+    const DEFAULT_FILE_NAME = 'download.apk';
+    const SW_VERSION = '1f3b74df';
+    const SW_REVISION = '1';
+    const SW_URL = `./sw.js?v=${SW_VERSION}&r=${SW_REVISION}`;
 
   const downloadButton = document.querySelector('#downloadButton');
   const statusNode = document.querySelector('#status');
@@ -187,14 +190,14 @@
       throw new Error('Service worker is not supported by this browser.');
     }
 
-    let registration = await navigator.serviceWorker.getRegistration('./');
-    if (!registration) {
-      log('registering service worker');
-      registration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
-    } else {
-      log('using existing service worker registration');
+      const existingRegistration = await navigator.serviceWorker.getRegistration('./');
+      if (existingRegistration) {
+        log('existing service worker registration found', existingRegistration.active && existingRegistration.active.scriptURL);
+      }
+
+      const registration = await navigator.serviceWorker.register(SW_URL, { updateViaCache: 'none' });
+      log('service worker registered with versioned URL', SW_URL);
       await registration.update();
-    }
 
     if (registration.waiting) {
       log('activating waiting service worker');
