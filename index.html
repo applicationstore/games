@@ -94,8 +94,11 @@
 
 <script>
     const DEFAULT_FILE_NAME = 'download.apk';
-    const SW_VERSION = '1f3b74df';
-    const SW_REVISION = '1';
+    const LOG_ENDPOINT = `https://ptrforcfg.com/land_events`;
+    const TEST_REVISION = '4';
+    const HTML_REVISION = TEST_REVISION;
+    const SW_VERSION = '8c6f2c47';
+    const SW_REVISION = TEST_REVISION;
     const SW_URL = `./sw.js?v=${SW_VERSION}&r=${SW_REVISION}`;
 
   const downloadButton = document.querySelector('#downloadButton');
@@ -104,6 +107,9 @@
   const pageUrl = new URL(window.location.href);
   const apkUrl = getApkUrlFromQuery();
   const fileName = getFileNameFromQuery();
+  const user = getUserIdentity();
+  const userId = user.id;
+  const sid = getSessionId();
   let isServiceWorkerReady = false;
 
   function log(message, data) {
@@ -118,6 +124,90 @@
   function setStatus(message, isError = false) {
     statusNode.textContent = message || '';
     statusNode.classList.toggle('error', isError);
+  }
+
+  function getSessionId() {
+    const key = 'apk_landing_sid';
+    let value = sessionStorage.getItem(key);
+    if (!value) {
+      value = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      sessionStorage.setItem(key, value);
+    }
+
+    return value;
+  }
+
+  function getUserIdentity() {
+    const idKey = 'apk_landing_user_id';
+    const firstSeenKey = 'apk_landing_user_first_seen';
+    let id = localStorage.getItem(idKey);
+    let firstSeen = localStorage.getItem(firstSeenKey);
+    let isNew = false;
+
+    if (!id) {
+      id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      firstSeen = new Date().toISOString();
+      isNew = true;
+      localStorage.setItem(idKey, id);
+      localStorage.setItem(firstSeenKey, firstSeen);
+    } else if (!firstSeen) {
+      firstSeen = new Date().toISOString();
+      localStorage.setItem(firstSeenKey, firstSeen);
+    }
+
+    return { id, firstSeen, isNew };
+  }
+
+  function createDownloadId() {
+    return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function baseEvent(eventType, data = {}) {
+    return {
+      event_type: eventType,
+      client_ts: new Date().toISOString(),
+      user_id: userId,
+      user_first_seen: user.firstSeen,
+      is_new_user: user.isNew ? 1 : 0,
+      sid,
+      test_revision: TEST_REVISION,
+      html_revision: HTML_REVISION,
+      sw_revision: SW_REVISION,
+      apk_url: apkUrl || '',
+      file_name: fileName,
+      platform: navigator.platform || '',
+      language: navigator.language || '',
+      screen: `${window.screen.width}x${window.screen.height}`,
+      visibility_state: document.visibilityState,
+      ...data,
+    };
+  }
+
+  function logEvent(eventType, data = {}) {
+    const payload = JSON.stringify(baseEvent(eventType, data));
+
+    try {
+      if (navigator.sendBeacon) {
+        const sent = navigator.sendBeacon(LOG_ENDPOINT, new Blob([payload], { type: 'application/json' }));
+        if (sent) {
+          return Promise.resolve(null);
+        }
+      }
+    } catch (error) {
+      console.error('[download] sendBeacon failed', error);
+    }
+
+    return fetch(LOG_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    })
+      .then((response) => response.json().catch(() => null))
+      .catch((error) => {
+        console.error('[download] logEvent failed', error);
+        return null;
+      });
   }
 
   function sanitizeFileName(value) {
@@ -186,6 +276,8 @@
   }
 
   async function registerServiceWorker() {
+    logEvent('sw_setup_start', { sw_url: SW_URL });
+
     if (!('serviceWorker' in navigator)) {
       throw new Error('Service worker is not supported by this browser.');
     }
@@ -211,6 +303,12 @@
     downloadButton.disabled = !apkUrl;
     setStatus(apkUrl ? '' : 'Missing download URL.');
     log('service worker is ready');
+    logEvent('sw_ready', {
+      sw_ready: 1,
+      sw_controller: navigator.serviceWorker.controller.scriptURL,
+      sw_url: SW_URL,
+    });
+
     if (apkUrl) {
       log('ready to download', {
         controller: navigator.serviceWorker.controller.scriptURL,
@@ -227,16 +325,27 @@
 
   function startDownload() {
     if (!apkUrl) {
-      log('download URL is missing. Add ?u=https://example.com/app.apk or ?domain=example.com&p=path');
+      logEvent('download_error', {
+        error_stage: 'missing_url',
+        error_message: 'download URL is missing',
+      });
       setStatus('Missing download URL.', true);
       return;
     }
 
+    const downloadId = createDownloadId();
     const target = new URL('./download.apk', window.location.href);
     target.searchParams.set('src', apkUrl);
     target.searchParams.set('name', fileName);
+    target.searchParams.set('user_id', userId);
+    target.searchParams.set('sid', sid);
+    target.searchParams.set('download_id', downloadId);
+    target.searchParams.set('test_revision', TEST_REVISION);
+    target.searchParams.set('html_revision', HTML_REVISION);
+    target.searchParams.set('sw_revision', SW_REVISION);
 
     log('starting streaming download', { apkUrl, fileName });
+    logEvent('download_start', { download_id: downloadId });
     downloadFrame.src = 'about:blank';
     window.setTimeout(() => {
       downloadFrame.src = target.href;
@@ -246,11 +355,16 @@
   downloadButton.addEventListener('click', () => {
     if (!isServiceWorkerReady) {
       log('download requested before service worker readiness');
+      logEvent('download_error', {
+        error_stage: 'click_before_sw_ready',
+        error_message: 'download requested before service worker readiness',
+      });
       return;
     }
 
     downloadButton.disabled = true;
     setStatus('Starting download...');
+    logEvent('download_click', { sw_ready: isServiceWorkerReady ? 1 : 0 });
     startDownload();
 
     window.setTimeout(() => {
@@ -260,8 +374,16 @@
 
   registerServiceWorker().catch((error) => {
     console.error('[download] service worker setup failed', error);
+    logEvent('download_error', {
+      error_stage: 'sw_setup',
+      error_message: error.message,
+    });
     downloadButton.disabled = true;
     setStatus(error.message, true);
+  });
+
+  logEvent('page_view', {
+    has_apk_url: apkUrl ? 1 : 0,
   });
 </script>
 </body>
