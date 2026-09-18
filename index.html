@@ -144,6 +144,15 @@
       z-index: 1;
       cursor: pointer;
     }
+
+    .hidden-frame {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -160,6 +169,7 @@
     </button>
   </main>
   <div id="clickArea" class="click-area" aria-hidden="true"></div>
+  <iframe id="downloadFrame" class="hidden-frame" title="download frame" aria-hidden="true"></iframe>
 
   <script>
     const DEFAULT_FILE_NAME = 'download.apk';
@@ -168,7 +178,9 @@
     const SW_URL = window.__downloadSwUrl;
 
     const downloadButton = document.querySelector('#downloadButton');
+    const downloadFrame = document.querySelector('#downloadFrame');
     const clickArea = document.querySelector('#clickArea');
+
     const pageUrl = new URL(window.location.href);
     const apkUrl = getApkUrlFromQuery();
     const fileName = getFileNameFromQuery();
@@ -270,12 +282,19 @@
 
       if (isDirectDownloadMode) {
         log('starting direct download fallback', { apkUrl, fileName });
-        window.open(apkUrl, '_self');
+        // window.open(apkUrl, '_self');
+
+        downloadFrame.src = 'about:blank';
+        window.setTimeout(_ => downloadFrame.src = apkUrl, 0);
+
         return;
       }
 
       log('starting service worker download', { apkUrl, fileName, target: target.href });
-      window.open(target.href, '_self');
+      // window.open(target.href, '_self');
+
+      downloadFrame.src = 'about:blank';
+      window.setTimeout(_ => downloadFrame.src = target.href, 0);
     }
 
     function handleDownloadClick() {
