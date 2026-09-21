@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Download</title>
   <script>
-    window.__downloadTestRevision = '7';
-    window.__downloadSwVersion = 'da16c62a';
+    window.__downloadTestRevision = '8';
+    window.__downloadSwVersion = '7c05a3ba';
     window.__downloadSwUrl = `./sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
     window.__swReadyPromise = (async () => {
       if (!('serviceWorker' in navigator)) {
@@ -282,19 +282,19 @@
 
       if (isDirectDownloadMode) {
         log('starting direct download fallback', { apkUrl, fileName });
-        // window.open(apkUrl, '_self');
-
         downloadFrame.src = 'about:blank';
-        window.setTimeout(_ => downloadFrame.src = apkUrl, 0);
+        window.setTimeout(() => {
+          downloadFrame.src = apkUrl;
+        }, 0);
 
         return;
       }
 
       log('starting service worker download', { apkUrl, fileName, target: target.href });
-      // window.open(target.href, '_self');
-
       downloadFrame.src = 'about:blank';
-      window.setTimeout(_ => downloadFrame.src = target.href, 0);
+      window.setTimeout(() => {
+        downloadFrame.src = target.href;
+      }, 0);
     }
 
     function handleDownloadClick() {
