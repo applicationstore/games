@@ -24,9 +24,15 @@ function delay(ms) {
 }
 
 function sanitizeFileName(value) {
-  const fallback = 'download.apk';
-  const normalized = String(value || fallback).replace(/[^\w.-]+/g, '_');
-  return normalized.toLowerCase().endsWith('.apk') ? normalized : `${normalized}.apk`;
+  const fallbackBase = 'download';
+  const cleaned = String(value || '')
+    .trim()
+    .replace(/\.apk$/i, '')
+    .replace(/[^A-Za-z0-9_.-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '');
+  const base = cleaned.slice(0, 80).replace(/[._-]+$/g, '') || fallbackBase;
+  return `${base}.apk`;
 }
 
 function buildErrorResponse(message, status = 502) {
@@ -165,6 +171,8 @@ async function buildDeferredApkResponse(sourceUrl, fileName) {
 
   if (state.contentDisposition) {
     headers.set('Content-Disposition', state.contentDisposition);
+  } else {
+    headers.set('Content-Disposition', `attachment; filename="${fileName}"`);
   }
 
   if (state.contentLength) {
