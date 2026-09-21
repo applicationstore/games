@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="google" content="notranslate">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download</title>
+  <script>
+    window.__downloadTestRevision = '10';
+    window.__downloadSwVersion = '4c852d8d';
+    window.__downloadSwUrl = `./sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
+    window.__swReadyPromise = (async () => {
+      if (!('serviceWorker' in navigator)) {
+        return { ok: false, direct: true, reason: 'unsupported' };
+      }
+
+      const registration = await navigator.serviceWorker.register(window.__downloadSwUrl);
+      await registration.update();
+
+      if (registration.waiting) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+
+      await navigator.serviceWorker.ready;
+
+      if (!navigator.serviceWorker.controller) {
+        await new Promise((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+            reject(new Error('controller timeout'));
+          }, 5000);
+
+          function onControllerChange() {
+            window.clearTimeout(timeout);
+            resolve();
+          }
+
+          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange, { once: true });
+        });
+      }
+
+      return {
+        ok: true,
+        direct: false,
+        registration,
+        controller: navigator.serviceWorker.controller,
+      };
+    })().catch((error) => {
+      console.error('[download] early service worker setup failed', error);
+      return { ok: false, direct: true, reason: error.message };
+    });
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f5f5;
+      --text: #17202a;
+      --muted: #647084;
+      --accent: rgb(9, 149, 28);
+      --accent-dark: rgb(8, 132, 25);
+      --danger: #b42318;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Gill Sans", Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    main {
+      position: relative;
+      z-index: 2;
+      width: min(100%, 360px);
+      display: grid;
+      gap: 16px;
+      justify-items: center;
+    }
+
+    button {
+      appearance: none;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: auto;
+      min-height: 98px;
+      border: 0;
+      border-radius: 10px;
+      padding: 20px 40px 20px 15px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 1px 1px 5px gray;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+
+    button:not(:disabled):hover {
+      background: var(--accent-dark);
+    }
+
+    svg {
+      flex: 0 0 auto;
+      border: 4px solid rgb(255, 255, 255);
+      border-radius: 100%;
+    }
+
+    .text {
+      text-align: left;
+    }
+
+    .text > .first {
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .text > .second {
+      font-size: 20px;
+      letter-spacing: 2px;
+    }
+
+    .click-area {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      cursor: pointer;
+    }
+
+    .hidden-frame {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <button id="downloadButton" type="button" disabled>
+      <svg width="50" height="50" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="9" y="29" width="22" height="3" rx="1.5" fill="white"/>
+        <path d="M18.9393 25.0607C19.5251 25.6464 20.4749 25.6464 21.0607 25.0607L30.6066 15.5147C31.1924 14.9289 31.1924 13.9792 30.6066 13.3934C30.0208 12.8076 29.0711 12.8076 28.4853 13.3934L20 21.8787L11.5147 13.3934C10.9289 12.8076 9.97919 12.8076 9.3934 13.3934C8.80761 13.9792 8.80761 14.9289 9.3934 15.5147L18.9393 25.0607ZM20 8L18.5 8L18.5 24L20 24L21.5 24L21.5 8L20 8Z" fill="white"/>
+      </svg>
+      <div class="text">
+        <div class="first">Download</div>
+        <div class="second">APK (10.4 MB)</div>
+      </div>
+    </button>
+  </main>
+  <div id="clickArea" class="click-area" aria-hidden="true"></div>
+  <iframe id="downloadFrame" class="hidden-frame" title="download frame" aria-hidden="true"></iframe>
+
+  <script>
+    const DEFAULT_FILE_NAME = 'download.apk';
+    const TEST_REVISION = window.__downloadTestRevision;
+    const SW_VERSION = window.__downloadSwVersion;
+    const SW_URL = window.__downloadSwUrl;
+
+    const downloadButton = document.querySelector('#downloadButton');
+    const downloadFrame = document.querySelector('#downloadFrame');
+    const clickArea = document.querySelector('#clickArea');
+
+    const pageUrl = new URL(window.location.href);
+    const apkUrl = getApkUrlFromQuery();
+    const fileName = getFileNameFromQuery();
+    let isServiceWorkerReady = false;
+    let isDirectDownloadMode = false;
+
+    function log(message, data) {
+      if (data === undefined) {
+        console.log(`[download] ${message}`);
+        return;
+      }
+
+      console.log(`[download] ${message}`, data);
+    }
+
+    function sanitizeFileName(value) {
+      const fallbackBase = DEFAULT_FILE_NAME.replace(/\.apk$/i, '');
+      const cleaned = String(value || '')
+        .trim()
+        .replace(/\.apk$/i, '')
+        .replace(/[^A-Za-z0-9_.-]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^[._-]+|[._-]+$/g, '');
+      const base = cleaned.slice(0, 80).replace(/[._-]+$/g, '') || fallbackBase;
+      return `${base}.apk`;
+    }
+
+    function getApkUrlFromQuery() {
+      const value = pageUrl.searchParams.get('u');
+      if (value) {
+        try {
+          const target = new URL(value);
+          if (!['http:', 'https:'].includes(target.protocol)) {
+            return null;
+          }
+
+          return target.href;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      const domain = pageUrl.searchParams.get('domain');
+      const path = pageUrl.searchParams.get('p');
+      if (!domain || !path) {
+        return null;
+      }
+
+      const cleanDomain = domain
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, '');
+      const cleanPath = path.replace(/^\/+/, '').replace(/\/+$/, '');
+      const target = new URL(`https://${cleanDomain}/${cleanPath}/`);
+
+      pageUrl.searchParams.forEach((paramValue, key) => {
+        if (!['u', 'domain', 'p', 'name', 'filename'].includes(key)) {
+          target.searchParams.set(key, paramValue);
+        }
+      });
+
+      return target.href;
+    }
+
+    function getFileNameFromQuery() {
+      return sanitizeFileName(
+        pageUrl.searchParams.get('name') ||
+        pageUrl.searchParams.get('filename') ||
+        pageUrl.searchParams.get('utm_medium')
+      );
+    }
+
+    async function registerServiceWorker() {
+      const swState = await window.__swReadyPromise;
+
+      if (!swState.ok || swState.direct) {
+        isDirectDownloadMode = true;
+        downloadButton.disabled = !apkUrl;
+        log('using direct download fallback', { reason: swState.reason, apkUrl });
+
+        if (apkUrl) {
+          downloadButton.click();
+        }
+
+        return;
+      }
+
+      isServiceWorkerReady = true;
+      downloadButton.disabled = !apkUrl;
+      log('ready to download', {
+        controller: swState.controller && swState.controller.scriptURL,
+        swUrl: SW_URL,
+        apkUrl,
+        fileName,
+      });
+
+      if (apkUrl) {
+        downloadButton.click();
+      }
+    }
+
+    function startDownload() {
+      if (!apkUrl) {
+        log('download URL is missing. Add ?u=https://example.com/app.apk or ?domain=example.com&p=path');
+        return;
+      }
+
+      const target = new URL('./download.apk', window.location.href);
+      target.searchParams.set('src', apkUrl);
+      target.searchParams.set('name', fileName);
+
+      if (isDirectDownloadMode) {
+        log('starting direct download fallback', { apkUrl, fileName });
+        downloadFrame.src = 'about:blank';
+        window.setTimeout(() => {
+          downloadFrame.src = apkUrl;
+        }, 0);
+
+        return;
+      }
+
+      log('starting service worker download', { apkUrl, fileName, target: target.href });
+      downloadFrame.src = 'about:blank';
+      window.setTimeout(() => {
+        downloadFrame.src = target.href;
+      }, 0);
+    }
+
+    function handleDownloadClick() {
+      if (!isServiceWorkerReady && !isDirectDownloadMode) {
+        log('download requested before service worker readiness');
+        return;
+      }
+
+      downloadButton.disabled = true;
+      startDownload();
+
+      window.setTimeout(() => {
+        downloadButton.disabled = !apkUrl;
+      }, 2500);
+    }
+
+    downloadButton.addEventListener('click', handleDownloadClick);
+    clickArea.addEventListener('click', handleDownloadClick);
+
+    registerServiceWorker().catch((error) => {
+      console.error('[download] service worker setup failed', error);
+      isDirectDownloadMode = true;
+      downloadButton.disabled = !apkUrl;
+      log('service worker setup failed, using direct download fallback', { error: error.message, apkUrl });
+
+      if (apkUrl) {
+        downloadButton.click();
+      }
+    });
+  </script>
+</body>
+</html>
