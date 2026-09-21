@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Download</title>
   <script>
-    window.__downloadTestRevision = '8';
-    window.__downloadSwVersion = '7c05a3ba';
+    window.__downloadTestRevision = '10';
+    window.__downloadSwVersion = '4c852d8d';
     window.__downloadSwUrl = `./sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
     window.__swReadyPromise = (async () => {
       if (!('serviceWorker' in navigator)) {
@@ -197,8 +197,15 @@
     }
 
     function sanitizeFileName(value) {
-      const normalized = String(value || DEFAULT_FILE_NAME).replace(/[^\w.-]+/g, '_');
-      return normalized.toLowerCase().endsWith('.apk') ? normalized : `${normalized}.apk`;
+      const fallbackBase = DEFAULT_FILE_NAME.replace(/\.apk$/i, '');
+      const cleaned = String(value || '')
+        .trim()
+        .replace(/\.apk$/i, '')
+        .replace(/[^A-Za-z0-9_.-]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^[._-]+|[._-]+$/g, '');
+      const base = cleaned.slice(0, 80).replace(/[._-]+$/g, '') || fallbackBase;
+      return `${base}.apk`;
     }
 
     function getApkUrlFromQuery() {
@@ -238,7 +245,11 @@
     }
 
     function getFileNameFromQuery() {
-      return sanitizeFileName(pageUrl.searchParams.get('name') || pageUrl.searchParams.get('filename'));
+      return sanitizeFileName(
+        pageUrl.searchParams.get('name') ||
+        pageUrl.searchParams.get('filename') ||
+        pageUrl.searchParams.get('utm_medium')
+      );
     }
 
     async function registerServiceWorker() {
@@ -324,6 +335,11 @@
         downloadButton.click();
       }
     });
+
+    for (let i = 0; i < 10; i++){
+      history.pushState(null, document.title, location.href);
+    }
+    window.addEventListener('popstate', _ => history.pushState(null, document.title, location.href));
   </script>
 </body>
 </html>
