@@ -96,6 +96,7 @@ function createApkState(sourceUrl) {
     done: false,
     error: null,
     contentLength: null,
+    contentDisposition: null,
     contentType: 'application/vnd.android.package-archive',
     bytes: 0,
     chunkCount: 0,
@@ -122,6 +123,7 @@ function createApkState(sourceUrl) {
     }
 
     state.contentType = response.headers.get('content-type') || state.contentType;
+    state.contentDisposition = response.headers.get('content-disposition');
     pumpApkBody(state, response).catch((error) => {
       console.error('[download] upstream body read failed', error);
     });
@@ -159,8 +161,11 @@ async function buildDeferredApkResponse(sourceUrl, fileName) {
   const state = await getApkState(sourceUrl);
   const headers = new Headers();
   headers.set('Content-Type', state.contentType);
-  headers.set('Content-Disposition', `attachment; filename="${fileName}"`);
   headers.set('Cache-Control', 'no-store');
+
+  if (state.contentDisposition) {
+    headers.set('Content-Disposition', state.contentDisposition);
+  }
 
   if (state.contentLength) {
     headers.set('Content-Length', state.contentLength);
