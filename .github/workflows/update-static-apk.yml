@@ -46,8 +46,15 @@ jobs:
           set -euo pipefail
           tmp="${TARGET_PATH}.tmp"
           mkdir -p "$(dirname "$TARGET_PATH")"
-          curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 300 \
+          echo "TARGET_PATH=${TARGET_PATH}"
+          echo "APK_URL=${APK_URL}"
+          curl -fL -v --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 300 \
+            -A 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36' \
+            -H 'Accept: application/vnd.android.package-archive,application/octet-stream,*/*' \
+            -w '\nhttp_code=%{http_code}\nremote_ip=%{remote_ip}\ntime_namelookup=%{time_namelookup}\ntime_connect=%{time_connect}\ntime_appconnect=%{time_appconnect}\ntime_starttransfer=%{time_starttransfer}\ntime_total=%{time_total}\nsize_download=%{size_download}\nurl_effective=%{url_effective}\n' \
             --output "$tmp" "$APK_URL"
+          ls -l "$tmp"
+          file "$tmp" || true
           test -s "$tmp"
           mv -f "$tmp" "$TARGET_PATH"
 
