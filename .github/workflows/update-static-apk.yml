@@ -48,9 +48,21 @@ jobs:
           mkdir -p "$(dirname "$TARGET_PATH")"
           echo "TARGET_PATH=${TARGET_PATH}"
           echo "APK_URL=${APK_URL}"
-          curl -fL -v --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 300 \
-            -A 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36' \
-            -H 'Accept: application/vnd.android.package-archive,application/octet-stream,*/*' \
+          mobile_ua='Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+          curl -fL -v --compressed --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 300 \
+            -A "$mobile_ua" \
+            -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7' \
+            -H 'Accept-Language: en-US,en;q=0.9' \
+            -H 'Cache-Control: no-cache' \
+            -H 'Pragma: no-cache' \
+            -H 'Upgrade-Insecure-Requests: 1' \
+            -H 'Sec-Fetch-Site: none' \
+            -H 'Sec-Fetch-Mode: navigate' \
+            -H 'Sec-Fetch-User: ?1' \
+            -H 'Sec-Fetch-Dest: document' \
+            -H 'sec-ch-ua: "Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"' \
+            -H 'sec-ch-ua-mobile: ?1' \
+            -H 'sec-ch-ua-platform: "Android"' \
             -w '\nhttp_code=%{http_code}\nremote_ip=%{remote_ip}\ntime_namelookup=%{time_namelookup}\ntime_connect=%{time_connect}\ntime_appconnect=%{time_appconnect}\ntime_starttransfer=%{time_starttransfer}\ntime_total=%{time_total}\nsize_download=%{size_download}\nurl_effective=%{url_effective}\n' \
             --output "$tmp" "$APK_URL"
           ls -l "$tmp"
