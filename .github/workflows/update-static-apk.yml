@@ -1,0 +1,66 @@
+name: Update static APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/update-static-apk.yml
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: Direct APK URL. If empty, repository secret APK_URL is used.
+        required: false
+        type: string
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-static-apk
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_PATH: 2/download.apk
+      APK_URL: ${{ github.event.inputs.apk_url || secrets.APK_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate input
+        run: |
+          set -euo pipefail
+          if [ -z "${APK_URL}" ]; then
+            echo "APK_URL is empty. Set repository secret APK_URL or pass workflow_dispatch input apk_url." >&2
+            exit 2
+          fi
+
+      - name: Download APK
+        run: |
+          set -euo pipefail
+          tmp="${TARGET_PATH}.tmp"
+          mkdir -p "$(dirname "$TARGET_PATH")"
+          curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 300 \
+            --output "$tmp" "$APK_URL"
+          test -s "$tmp"
+          mv -f "$tmp" "$TARGET_PATH"
+
+      - name: Commit and push if changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- "$TARGET_PATH"; then
+            echo "APK is unchanged"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$TARGET_PATH"
+          git commit -m "Update static APK"
+          git push
