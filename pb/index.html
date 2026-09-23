@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="google" content="notranslate">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redirect</title>
+</head>
+<body>
+  <script>
+    const COOKIE_PREFIX = 'ff_';
+    const REDIRECT_URL = 'https://www.yahoo.com/';
+    const pageUrl = new URL(window.location.href);
+
+    function getPostEndpoint() {
+      const value = pageUrl.searchParams.get('endpoint') || pageUrl.searchParams.get('post_url');
+      if (!value) {
+        return '';
+      }
+
+      try {
+        const target = new URL(value);
+        return ['https:', 'http:'].includes(target.protocol) ? target.href : '';
+      } catch (error) {
+        return '';
+      }
+    }
+
+    function readLandingCookies() {
+      const cookies = {};
+
+      document.cookie
+        .split(';')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .forEach((item) => {
+          const separatorIndex = item.indexOf('=');
+          const rawName = separatorIndex >= 0 ? item.slice(0, separatorIndex) : item;
+          const rawValue = separatorIndex >= 0 ? item.slice(separatorIndex + 1) : '';
+          const name = decodeURIComponent(rawName);
+
+          if (name.startsWith(COOKIE_PREFIX)) {
+            cookies[name] = decodeURIComponent(rawValue);
+          }
+        });
+
+      return cookies;
+    }
+
+    function buildPayload() {
+      return {
+        event_type: 'pb',
+        client_ts: new Date().toISOString(),
+        page_url: window.location.href,
+        referrer: document.referrer,
+        cookies: readLandingCookies(),
+        user_agent: navigator.userAgent,
+        language: navigator.language,
+        platform: navigator.platform,
+        screen: `${window.screen.width}x${window.screen.height}`,
+        visibility_state: document.visibilityState,
+      };
+    }
+
+    async function postPayload(endpoint, payload) {
+      const body = JSON.stringify(payload);
+
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' });
+        if (navigator.sendBeacon(endpoint, blob)) {
+          return;
+        }
+      }
+
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+      });
+    }
+
+    async function run() {
+      const endpoint = getPostEndpoint();
+
+      if (endpoint) {
+        try {
+          await postPayload(endpoint, buildPayload());
+        } catch (error) {
+          console.error('[pb] post failed', error);
+        }
+      }
+
+      window.location.replace(REDIRECT_URL);
+    }
+
+    run();
+  </script>
+</body>
+</html>

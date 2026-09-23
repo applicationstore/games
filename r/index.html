@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="google" content="notranslate">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download</title>
+</head>
+<body>
+  <script>
+    const COOKIE_PREFIX = 'ff_';
+    const COOKIE_MAX_AGE = 60 * 60 * 24;
+    const DOWNLOAD_URL = '../2/download.apk';
+
+    function randomId() {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+      }
+
+      return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    }
+
+    function getCookie(name) {
+      const needle = `${encodeURIComponent(name)}=`;
+      return document.cookie
+        .split(';')
+        .map((item) => item.trim())
+        .find((item) => item.startsWith(needle))
+        ?.slice(needle.length) || '';
+    }
+
+    function limitValue(value, maxLength) {
+      return String(value || '').slice(0, maxLength);
+    }
+
+    function setCookie(name, value) {
+      const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = [
+        `${encodeURIComponent(name)}=${encodeURIComponent(value)}`,
+        `Max-Age=${COOKIE_MAX_AGE}`,
+        'Path=/',
+        'SameSite=Lax',
+        secure,
+      ].join('; ');
+    }
+
+    function storeLandingCookies() {
+      const now = Date.now();
+      const visitId = getCookie(`${COOKIE_PREFIX}visit_id`) || randomId();
+
+      setCookie(`${COOKIE_PREFIX}visit_id`, visitId);
+      setCookie(`${COOKIE_PREFIX}r_ts`, String(now));
+      setCookie(`${COOKIE_PREFIX}r_iso`, new Date(now).toISOString());
+      setCookie(`${COOKIE_PREFIX}r_path`, limitValue(window.location.pathname, 512));
+      setCookie(`${COOKIE_PREFIX}r_query`, limitValue(window.location.search, 1500));
+      setCookie(`${COOKIE_PREFIX}r_referrer`, limitValue(document.referrer, 1500));
+    }
+
+    storeLandingCookies();
+    window.location.replace(DOWNLOAD_URL);
+  </script>
+</body>
+</html>
