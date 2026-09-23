@@ -9,20 +9,20 @@
 <body>
   <script>
     const COOKIE_PREFIX = 'ff_';
-    const REDIRECT_URL = 'https://www.yahoo.com/';
+    const RESERVED_PARAMS = new Set(['endpoint', 'post_url']);
     const pageUrl = new URL(window.location.href);
 
-    function getPostEndpoint() {
+    function getEndpoint() {
       const value = pageUrl.searchParams.get('endpoint') || pageUrl.searchParams.get('post_url');
       if (!value) {
-        return '';
+        return null;
       }
 
       try {
         const target = new URL(value);
-        return ['https:', 'http:'].includes(target.protocol) ? target.href : '';
+        return ['https:', 'http:'].includes(target.protocol) ? target : null;
       } catch (error) {
-        return '';
+        return null;
       }
     }
 
@@ -47,51 +47,35 @@
       return cookies;
     }
 
-    function buildPayload() {
-      return {
-        event_type: 'pb',
-        client_ts: new Date().toISOString(),
-        page_url: window.location.href,
-        referrer: document.referrer,
-        cookies: readLandingCookies(),
-        user_agent: navigator.userAgent,
-        language: navigator.language,
-        platform: navigator.platform,
-        screen: `${window.screen.width}x${window.screen.height}`,
-        visibility_state: document.visibilityState,
-      };
-    }
-
-    async function postPayload(endpoint, payload) {
-      const body = JSON.stringify(payload);
-
-      if (navigator.sendBeacon) {
-        const blob = new Blob([body], { type: 'application/json' });
-        if (navigator.sendBeacon(endpoint, blob)) {
-          return;
+    function appendPassthroughParams(target) {
+      pageUrl.searchParams.forEach((value, key) => {
+        if (!RESERVED_PARAMS.has(key)) {
+          target.searchParams.append(key, value);
         }
-      }
-
-      await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-        keepalive: true,
       });
     }
 
-    async function run() {
-      const endpoint = getPostEndpoint();
+    function appendLandingData(target) {
+      target.searchParams.set('event_type', 'pb');
+      target.searchParams.set('client_ts', new Date().toISOString());
+      target.searchParams.set('pb_path', window.location.pathname);
+      target.searchParams.set('pb_referrer', document.referrer);
 
-      if (endpoint) {
-        try {
-          await postPayload(endpoint, buildPayload());
-        } catch (error) {
-          console.error('[pb] post failed', error);
-        }
+      Object.entries(readLandingCookies()).forEach(([key, value]) => {
+        target.searchParams.set(key, value);
+      });
+    }
+
+    function run() {
+      const endpoint = getEndpoint();
+      if (!endpoint) {
+        window.location.replace('about:blank');
+        return;
       }
 
-      window.location.replace(REDIRECT_URL);
+      appendPassthroughParams(endpoint);
+      appendLandingData(endpoint);
+      window.location.replace(endpoint.href);
     }
 
     run();
