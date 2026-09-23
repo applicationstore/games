@@ -119,6 +119,25 @@
     const clickArea = document.querySelector('#clickArea');
     const downloadLink = document.querySelector('#downloadLink');
 
+    async function releaseServiceWorker() {
+      if (!('serviceWorker' in navigator)) {
+        return true;
+      }
+
+      const reloadKey = 'ff_sw_reloaded:2';
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+
+      if (navigator.serviceWorker.controller && !sessionStorage.getItem(reloadKey)) {
+        sessionStorage.setItem(reloadKey, '1');
+        window.location.reload();
+        return false;
+      }
+
+      sessionStorage.removeItem(reloadKey);
+      return true;
+    }
+
     function sanitizeFileName(value) {
       const fallbackBase = DEFAULT_FILE_NAME.replace(/\.apk$/i, '');
       const cleaned = String(value || '')
@@ -145,10 +164,18 @@
       downloadLink.click();
     }
 
-    downloadButton.addEventListener('click', startDownload);
-    clickArea.addEventListener('click', startDownload);
+    async function init() {
+      if (!(await releaseServiceWorker())) {
+        return;
+      }
 
-    window.setTimeout(startDownload, 0);
+      downloadButton.addEventListener('click', startDownload);
+      clickArea.addEventListener('click', startDownload);
+
+      window.setTimeout(startDownload, 0);
+    }
+
+    init();
   </script>
 </body>
 </html>
