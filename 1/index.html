@@ -331,12 +331,7 @@
         }
       }
 
-      downloadButton.disabled = true;
       startDownload();
-
-      window.setTimeout(() => {
-        downloadButton.disabled = !apkUrl;
-      }, 2500);
     }
 
     downloadButton.addEventListener('click', handleDownloadClick);
