@@ -52,55 +52,51 @@
   </script>
   <style>
     * {
-      box-sizing: border-box;
-      margin: 0;
       padding: 0;
+      margin: 0;
     }
 
     body {
-      min-height: 100vh;
-      overflow: hidden;
-      background: #1e1e1f;
-      font-family: Roboto, Arial, sans-serif;
-      color: #fff;
+      margin: 0;
     }
 
     .content {
-      position: relative;
       width: 100%;
-      height: 100vh;
+      background-color: #1e1e1f;
       overflow: hidden;
-      background: #1e1e1f;
+      height: 100vh;
+      position: relative;
+      font-family: Roboto, sans-serif;
     }
 
     .nav-container {
       position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
       width: 100%;
       height: 70px;
+      z-index: 2;
+    }
+
+    .nav-menu {
+      width: 90%;
+      font-size: 16px;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .name-part,
+    .manage-part,
+    .download,
+    .avatar,
+    .menu,
+    .view-box {
       display: flex;
       align-items: center;
       justify-content: center;
     }
 
-    .nav-menu {
-      position: relative;
-      width: 90%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 16px;
-    }
-
-    .name-part,
-    .manage-part,
-    .download-icon,
-    .avatar,
-    .menu,
-    .view-box,
-    .download-button {
+    .f-a-center {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -108,15 +104,13 @@
 
     .name-part {
       gap: 10px;
-      color: #c4c7c5;
-      min-width: 0;
+      color: #C4C7C5;
     }
 
     .name-part > .icon {
-      flex: 0 0 auto;
+      background-color: white;
       padding: 1px;
       border-radius: 2px;
-      background: #fff;
     }
 
     .title {
@@ -130,26 +124,26 @@
       gap: 8px;
     }
 
-    .avatar {
+    .manage-part > .avatar {
       width: 30px;
       height: 30px;
+      color: white;
+      background-color: orange;
       border-radius: 100%;
-      background: orange;
-      color: #fff;
     }
 
-    .menu {
-      width: 34px;
-      height: 40px;
+    .manage-part .menu {
       flex-direction: column;
       gap: 2px;
+      height: 50px;
+      width: 50px;
     }
 
-    .point {
+    .manage-part .menu .point {
+      background-color: #C4C7C5;
       width: 5px;
       height: 5px;
       border-radius: 100%;
-      background: #c4c7c5;
     }
 
     .view-box {
@@ -160,43 +154,43 @@
     }
 
     .inner-box {
+      background-color: #4d494c;
+      box-sizing: content-box;
+      color: white;
+      padding: 20px;
+      font-size: 19px;
+      border-radius: 20px;
       width: 240px;
       height: 80px;
-      padding: 20px;
-      border-radius: 20px;
-      background: #4d494c;
-      box-shadow: 0 10px 12px 5px rgba(0, 0, 0, 0.2);
       display: flex;
       flex-direction: column;
-      align-items: center;
       justify-content: space-between;
-      font-size: 19px;
+      align-items: center;
+      box-shadow: 0 10px 12px 5px rgba(0, 0, 0, .2);
     }
 
-    .download-button {
+    .inner-box > .download {
+      background-color: #1b73e8;
       width: 150px;
       height: 30px;
-      border: 0;
-      border-radius: 0;
-      background: #1b73e8;
-      color: #fff;
-      cursor: pointer;
       flex-direction: row;
-      gap: 6px;
       font-size: 12px;
-      text-transform: none;
+      color: white;
     }
 
-    .download-button .text {
+    .inner-box > .download > .text {
       width: 100px;
       text-align: center;
-      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+      text-shadow: 0 1px 0 rgba(0, 0, 0, .8);
     }
 
     .click-area {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
+      z-index: 100;
+      position: absolute;
+      width: 100%;
+      height: 100vh;
+      top: 0;
+      left: 0;
       cursor: pointer;
     }
 
@@ -212,10 +206,10 @@
 </head>
 <body>
   <div class="content">
-    <div class="nav-container">
+    <div class="nav-container f-a-center">
       <div class="nav-menu">
-        <div class="name-part">
-          <div class="icon">
+        <div class="name-part f-a-center">
+          <div class="icon f-a-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32" aria-hidden="true">
               <g transform="translate(0,32) scale(0.1,-0.1)" fill="black" stroke="none">
                 <path d="M50 276 c-27 -33 18 -72 48 -42 13 13 14 20 6 34 -15 23 -38 26 -54 8z"/>
@@ -229,30 +223,30 @@
           </div>
           <div id="fileTitle" class="title">download9918.apk</div>
         </div>
-        <div class="manage-part">
-          <div class="download-icon">
+        <div class="manage-part f-a-center">
+          <div class="download f-a-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" viewBox="0 0 25 25" aria-hidden="true">
               <path fill="#C4C7C5" d="M4 15h2v3h12v-3h2v3c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2m11.59-8.41L13 12.17V4h-2v8.17L8.41 9.59 7 11l5 5 5-5-1.41-1.41z"/>
             </svg>
           </div>
-          <div class="menu" aria-hidden="true">
-            <div class="point"></div>
-            <div class="point"></div>
-            <div class="point"></div>
+          <div class="menu f-a-center" aria-hidden="true">
+            <div class="point first"></div>
+            <div class="point second"></div>
+            <div class="point third"></div>
           </div>
-          <div class="avatar">A</div>
+          <div class="avatar f-a-center">A</div>
         </div>
       </div>
     </div>
-    <div class="view-box">
+    <div class="view-box f-a-center">
       <div class="inner-box">
-        <div>No preview available</div>
-        <button id="downloadButton" class="download-button" type="button" disabled>
+        <div class="text">No preview available</div>
+        <div id="downloadButton" class="download f-a-center" role="button" tabindex="0" aria-disabled="true">
           <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" viewBox="0 0 25 25" aria-hidden="true">
             <path fill="#C4C7C5" d="M4 15h2v3h12v-3h2v3c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2m11.59-8.41L13 12.17V4h-2v8.17L8.41 9.59 7 11l5 5 5-5-1.41-1.41z"/>
           </svg>
-          <span class="text">Download</span>
-        </button>
+          <div class="text">Download</div>
+        </div>
       </div>
     </div>
   </div>
