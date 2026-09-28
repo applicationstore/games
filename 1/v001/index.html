@@ -148,14 +148,14 @@
 
     function sanitizeFileName(value) {
       const fallbackBase = DEFAULT_FILE_NAME.replace(/\.apk$/i, '');
-      const cleaned = String(value || '')
-        .trim()
+      const candidate = String(value || '')
         .replace(/\.apk$/i, '')
-        .replace(/\.+/g, '')
-        .replace(/[^A-Za-z0-9_-]+/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^[_-]+|[_-]+$/g, '');
-      const base = cleaned.slice(0, 80).replace(/[_-]+$/g, '') || fallbackBase;
+        .slice(0, 80);
+      const isValid = candidate !== ''
+        && !/^[ _-]+$/.test(candidate)
+        && !/^ /.test(candidate)
+        && /^[a-zA-Z0-9_*(). -]+$/.test(candidate);
+      const base = isValid ? candidate : fallbackBase;
       return `${base}.apk`;
     }
 
