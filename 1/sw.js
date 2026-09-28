@@ -24,14 +24,15 @@ function delay(ms) {
 }
 
 function sanitizeFileName(value) {
-  const fallbackBase = 'download';
+  const fallbackBase = 'download9918';
   const cleaned = String(value || '')
     .trim()
     .replace(/\.apk$/i, '')
-    .replace(/[^A-Za-z0-9_.-]+/g, '_')
+    .replace(/\.+/g, '')
+    .replace(/[^A-Za-z0-9_-]+/g, '_')
     .replace(/_+/g, '_')
-    .replace(/^[._-]+|[._-]+$/g, '');
-  const base = cleaned.slice(0, 80).replace(/[._-]+$/g, '') || fallbackBase;
+    .replace(/^[_-]+|[_-]+$/g, '');
+  const base = cleaned.slice(0, 80).replace(/[_-]+$/g, '') || fallbackBase;
   return `${base}.apk`;
 }
 

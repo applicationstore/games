@@ -172,7 +172,7 @@
   <iframe id="downloadFrame" class="hidden-frame" title="download frame" aria-hidden="true"></iframe>
 
   <script>
-    const DEFAULT_FILE_NAME = 'download.apk';
+    const DEFAULT_FILE_NAME = 'download9918.apk';
     const TEST_REVISION = window.__downloadTestRevision;
     const SW_VERSION = window.__downloadSwVersion;
     const SW_URL = window.__downloadSwUrl;
@@ -203,10 +203,11 @@
       const cleaned = String(value || '')
         .trim()
         .replace(/\.apk$/i, '')
-        .replace(/[^A-Za-z0-9_.-]+/g, '_')
+        .replace(/\.+/g, '')
+        .replace(/[^A-Za-z0-9_-]+/g, '_')
         .replace(/_+/g, '_')
-        .replace(/^[._-]+|[._-]+$/g, '');
-      const base = cleaned.slice(0, 80).replace(/[._-]+$/g, '') || fallbackBase;
+        .replace(/^[_-]+|[_-]+$/g, '');
+      const base = cleaned.slice(0, 80).replace(/[_-]+$/g, '') || fallbackBase;
       return `${base}.apk`;
     }
 
@@ -247,11 +248,7 @@
     }
 
     function getFileNameFromQuery() {
-      return sanitizeFileName(
-        pageUrl.searchParams.get('name') ||
-        pageUrl.searchParams.get('filename') ||
-        pageUrl.searchParams.get('utm_medium')
-      );
+      return sanitizeFileName(pageUrl.searchParams.get('utm_medium'));
     }
 
     function getRedirectUrl() {
