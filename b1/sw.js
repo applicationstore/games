@@ -213,7 +213,7 @@ async function getApkState(offerId, params, requestKey) {
   }
 
   if (apkError) {
-    throw apkError;
+    resetApkState();
   }
 
   if (!apkState) {
