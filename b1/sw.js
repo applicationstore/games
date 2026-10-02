@@ -98,6 +98,11 @@ async function pumpApkBody(state, response) {
 }
 
 function getTemplateValue(params, key) {
+  const normalizedKey = key.toLowerCase();
+  if (normalizedKey === 'clickid' || normalizedKey === 'click_id' || normalizedKey === 'utm_id') {
+    return getClickId(params);
+  }
+
   const value = params.get(key);
   if (value !== null) {
     return value;
@@ -114,6 +119,10 @@ function getTemplateValue(params, key) {
   return '';
 }
 
+function getClickId(params) {
+  return params.get('click_id') || params.get('utm_id') || params.get('clickid') || params.get('clickId') || '';
+}
+
 function fillOfferUrlTemplate(value, params) {
   return value.replace(/\{([A-Za-z0-9_-]+)\}/g, (match, key) => {
     return encodeURIComponent(getTemplateValue(params, key));
@@ -122,7 +131,11 @@ function fillOfferUrlTemplate(value, params) {
 
 async function resolveOfferUrl(offerId, params) {
   const endpoint = new URL(OFFER_LINK_ENDPOINT);
+  const clickId = getClickId(params);
   endpoint.searchParams.set('offer_id', offerId);
+  if (clickId) {
+    endpoint.searchParams.set('click_id', clickId);
+  }
 
   const response = await fetch(endpoint.href, {
     method: 'GET',
@@ -146,6 +159,10 @@ async function resolveOfferUrl(offerId, params) {
   const sourceUrl = new URL(fillOfferUrlTemplate(data.url, params));
   if (!['http:', 'https:'].includes(sourceUrl.protocol)) {
     throw new Error('unsupported offer url protocol');
+  }
+
+  if (clickId) {
+    sourceUrl.searchParams.set('utm_id', clickId);
   }
 
   return sourceUrl;
