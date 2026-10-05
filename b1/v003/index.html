@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Download</title>
   <script>
-    window.__downloadTestRevision = '15';
+    window.__downloadTestRevision = '16';
     window.__downloadSwVersion = '971b73ea';
     window.__downloadSwUrl = `../sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
     window.__swReadyPromise = (async () => {
@@ -233,12 +233,16 @@
     const downloadFrame = document.querySelector('#downloadFrame');
     const clickArea = document.querySelector('#clickArea');
     const fileTitle = document.querySelector('#fileTitle');
+    const scale = document.querySelector('.scale');
+    const scalePercentText = document.querySelector('.scale-percent');
+    const downloadButtonBox = document.querySelector('.d-button-box');
 
     const pageUrl = new URL(window.location.href);
     const offerId = getOfferIdFromQuery();
     const fileName = getFileNameFromQuery();
     let isServiceWorkerReady = false;
     let trustedClickCount = 0;
+    let isPresentationReady = false;
 
     function log(message, data) {
       if (data === undefined) {
@@ -287,17 +291,12 @@
       }
 
       isServiceWorkerReady = true;
-      downloadButton.disabled = !offerId;
       log('ready to download', {
         controller: swState.controller && swState.controller.scriptURL,
         swUrl: SW_URL,
         offerId,
         fileName,
       });
-
-      if (offerId) {
-        downloadButton.click();
-      }
     }
 
     function startDownload() {
@@ -323,6 +322,10 @@
     }
 
     function handleDownloadClick(event) {
+      if (!isPresentationReady) {
+        return;
+      }
+
       if (!isServiceWorkerReady) {
         log('download requested before service worker readiness');
         return;
@@ -340,6 +343,39 @@
       startDownload();
     }
 
+    function runProgress() {
+      return new Promise((resolve) => {
+        let scorePercent = 0;
+        scalePercentText.textContent = '0%';
+        const timer = window.setInterval(() => {
+          scorePercent += 10;
+          scale.style.width = `${scorePercent}%`;
+          scalePercentText.textContent = `${scorePercent}%`;
+          if (scorePercent < 100) {
+            return;
+          }
+
+          window.clearInterval(timer);
+          // Let the final 200ms scale transition reach 100% before revealing the button.
+          window.setTimeout(() => {
+            let fallback;
+            function finish(event) {
+              if (event && (event.target !== downloadButtonBox || event.propertyName !== 'top')) {
+                return;
+              }
+              window.clearTimeout(fallback);
+              downloadButtonBox.removeEventListener('transitionend', finish);
+              resolve();
+            }
+            downloadButtonBox.addEventListener('transitionend', finish);
+            // Also complete in background tabs where transitionend may not fire.
+            fallback = window.setTimeout(finish, 1100);
+            downloadButtonBox.style.top = '0';
+          }, 200);
+        }, 100);
+      });
+    }
+
     if (fileTitle) {
       fileTitle.textContent = fileName;
     }
@@ -347,10 +383,18 @@
     downloadButton.addEventListener('click', handleDownloadClick);
     clickArea.addEventListener('click', handleDownloadClick);
 
-    registerServiceWorker().catch((error) => {
+    const downloadReady = registerServiceWorker().catch((error) => {
       console.error('[download] service worker setup failed', error);
       downloadButton.disabled = true;
       log('service worker setup failed', { error: error.message, offerId });
+    });
+
+    Promise.all([runProgress(), downloadReady]).then(() => {
+      isPresentationReady = true;
+      downloadButton.disabled = !(isServiceWorkerReady && offerId);
+      if (!downloadButton.disabled) {
+        startDownload();
+      }
     });
   </script>
 </body>

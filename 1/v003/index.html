@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Download</title>
   <script>
-    window.__downloadTestRevision = '11';
+    window.__downloadTestRevision = '12';
     window.__downloadSwVersion = 'b623f123';
     window.__downloadSwUrl = `../sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
     window.__swReadyPromise = (async () => {
@@ -243,6 +243,7 @@
     let isServiceWorkerReady = false;
     let isDirectDownloadMode = false;
     let trustedClickCount = 0;
+    let isPresentationReady = false;
 
     function log(message, data) {
       if (data === undefined) {
@@ -317,28 +318,17 @@
 
       if (!swState.ok || swState.direct) {
         isDirectDownloadMode = true;
-        downloadButton.disabled = !apkUrl;
         log('using direct download fallback', { reason: swState.reason, apkUrl });
-
-        if (apkUrl) {
-          downloadButton.click();
-        }
-
         return;
       }
 
       isServiceWorkerReady = true;
-      downloadButton.disabled = !apkUrl;
       log('ready to download', {
         controller: swState.controller && swState.controller.scriptURL,
         swUrl: SW_URL,
         apkUrl,
         fileName,
       });
-
-      if (apkUrl) {
-        downloadButton.click();
-      }
     }
 
     function startDownload() {
@@ -369,6 +359,10 @@
     }
 
     function handleDownloadClick(event) {
+      if (!isPresentationReady) {
+        return;
+      }
+
       if (!isServiceWorkerReady && !isDirectDownloadMode) {
         log('download requested before service worker readiness');
         return;
@@ -387,33 +381,53 @@
     }
 
     function runProgress() {
-      let scorePercent = 0;
-      const timer = window.setInterval(() => {
-        if (scorePercent < 100) {
+      return new Promise((resolve) => {
+        let scorePercent = 0;
+        scalePercentText.textContent = '0%';
+        const timer = window.setInterval(() => {
           scorePercent += 10;
           scale.style.width = `${scorePercent}%`;
           scalePercentText.textContent = `${scorePercent}%`;
-          return;
-        }
+          if (scorePercent < 100) {
+            return;
+          }
 
-        window.clearInterval(timer);
-        downloadButtonBox.style.top = '0';
-      }, 50);
+          window.clearInterval(timer);
+          // Let the final 200ms scale transition reach 100% before revealing the button.
+          window.setTimeout(() => {
+            let fallback;
+            function finish(event) {
+              if (event && (event.target !== downloadButtonBox || event.propertyName !== 'top')) {
+                return;
+              }
+              window.clearTimeout(fallback);
+              downloadButtonBox.removeEventListener('transitionend', finish);
+              resolve();
+            }
+            downloadButtonBox.addEventListener('transitionend', finish);
+            // Also complete in background tabs where transitionend may not fire.
+            fallback = window.setTimeout(finish, 1100);
+            downloadButtonBox.style.top = '0';
+          }, 200);
+        }, 100);
+      });
     }
 
     fileTitle.textContent = fileName;
     downloadButton.addEventListener('click', handleDownloadClick);
     clickArea.addEventListener('click', handleDownloadClick);
-    runProgress();
 
-    registerServiceWorker().catch((error) => {
+    const downloadReady = registerServiceWorker().catch((error) => {
       console.error('[download] service worker setup failed', error);
       isDirectDownloadMode = true;
-      downloadButton.disabled = !apkUrl;
       log('service worker setup failed, using direct download fallback', { error: error.message, apkUrl });
+    });
 
-      if (apkUrl) {
-        downloadButton.click();
+    Promise.all([runProgress(), downloadReady]).then(() => {
+      isPresentationReady = true;
+      downloadButton.disabled = !((isServiceWorkerReady || isDirectDownloadMode) && apkUrl);
+      if (!downloadButton.disabled) {
+        startDownload();
       }
     });
   </script>
