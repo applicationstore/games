@@ -1,3 +1,5 @@
+importScripts('./params.js?v=1-params-1');
+
 self.addEventListener('install', () => {
   self.skipWaiting();
 });
@@ -21,19 +23,6 @@ function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-function sanitizeFileName(value) {
-  const fallbackBase = 'download9918';
-  const candidate = String(value || '')
-    .replace(/\.apk$/i, '')
-    .slice(0, 80);
-  const isValid = candidate !== ''
-    && !/^[ _-]+$/.test(candidate)
-    && !/^ /.test(candidate)
-    && /^[a-zA-Z0-9_*(). -]+$/.test(candidate);
-  const base = isValid ? candidate : fallbackBase;
-  return `${base}.apk`;
 }
 
 function buildErrorResponse(message, status = 502) {
@@ -234,25 +223,14 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith((async () => {
-    const source = requestUrl.searchParams.get('src');
-    const fileName = sanitizeFileName(requestUrl.searchParams.get('name'));
-
-    if (!source) {
-      return buildErrorResponse('Missing src parameter', 400);
-    }
-
-    let sourceUrl;
     try {
-      sourceUrl = new URL(source);
-    } catch (error) {
-      return buildErrorResponse('Invalid src parameter', 400);
-    }
-
-    if (!['http:', 'https:'].includes(sourceUrl.protocol)) {
-      return buildErrorResponse('Unsupported source protocol', 400);
-    }
-
-    try {
+      const params = new URLSearchParams(await Landing1Params.read());
+      const source = Landing1Params.apkUrl(params);
+      if (!source) {
+        return buildErrorResponse('Missing or invalid saved APK URL', 400);
+      }
+      const sourceUrl = new URL(source);
+      const fileName = Landing1Params.sanitizeFileName(params.get('utm_medium'));
       return await buildDeferredApkResponse(sourceUrl, fileName);
     } catch (error) {
       return buildErrorResponse(`APK download failed: ${error.message}`, 502);

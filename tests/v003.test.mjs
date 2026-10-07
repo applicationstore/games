@@ -36,15 +36,17 @@ function landing(variant, { query, ready = 'success' } = {}) {
   const window = {
     location: { href: `https://test.invalid/${variant}/v003/?${query ?? (variant === '1' ? 'u=https://files.invalid/app.apk' : 'offer_id=42')}&utm_medium=Example` },
     __landingParamsReady: Promise.resolve(),
-    __savedDownloadParams: new URLSearchParams(`${query ?? 'offer_id=42'}&utm_medium=Example`),
+    __savedDownloadParams: new URLSearchParams(`${query ?? (variant === '1' ? 'u=https://files.invalid/app.apk' : 'offer_id=42')}&utm_medium=Example`),
     __swReadyPromise: workerReady,
     setInterval: (fn, ms) => schedule(fn, ms, true),
     clearInterval: id => timers.delete(id),
     setTimeout: (fn, ms) => schedule(fn, ms),
     clearTimeout: id => timers.delete(id),
   };
+  const paramsContext = vm.createContext({ URL, self: { location: { href: 'https://test.invalid/1/sw.js' } } });
+  vm.runInContext(readFileSync(new URL('../1/params.js', import.meta.url), 'utf8'), paramsContext);
   // Execute the actual page UI script; readiness is controlled independently of its animation.
-  scripts.at(-1).runInNewContext({ window, document: { querySelector: element }, URL, URLSearchParams, console: { log() {}, error() {} } });
+  scripts.at(-1).runInNewContext({ window, document: { querySelector: element }, URL, URLSearchParams, Landing1Params: paramsContext.Landing1Params, console: { log() {}, error() {} } });
   return {
     element, downloads, resolveReady: () => resolveReady(success),
     async tick(ms) {
@@ -84,13 +86,8 @@ for (const variant of ['1', 'b1']) {
     assert.equal(page.downloads.length, 1);
     const url = page.downloads[0].url;
     assert.equal(url.pathname, `/${variant}/download.apk`);
-    if (variant === '1') {
-      assert.equal(url.searchParams.get('name'), 'Example.apk');
-      assert.equal(url.searchParams.get('src'), 'https://files.invalid/app.apk');
-    } else {
-      assert.equal(url.search, '', 'saved offer parameters must not appear in the download URL');
-      assert.equal(page.element('#fileTitle').textContent, 'Example.apk');
-    }
+    assert.equal(url.search, '', 'download URL must not carry saved parameters');
+    assert.equal(page.element('#fileTitle').textContent, 'Example.apk');
     await page.tick(1000);
     assert.equal(page.downloads.length, 1, 'fallback must not cause a second download');
     assert.equal(page.element('#downloadButton').disabled, false);

