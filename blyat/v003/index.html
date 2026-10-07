@@ -5,9 +5,9 @@
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Download</title>
-  <script src="../params.js?v=blyat-params-1"></script>
+  <script src="../params.js?v=blyat-params-3"></script>
   <script>
-    window.__downloadTestRevision = 'blyat-params-1';
+    window.__downloadTestRevision = 'blyat-params-3';
     window.__downloadSwVersion = '42316858';
     window.__downloadSwUrl = `../sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
     window.__swReadyPromise = (async () => {
@@ -316,7 +316,7 @@
         return;
       }
 
-      const target = new URL('../download.apk', window.location.href);
+      const target = new URL('../veltravia.apk', window.location.href);
       log('starting service worker download', { offerId, fileName, target: target.href });
       downloadFrame.src = 'about:blank';
       window.setTimeout(() => {

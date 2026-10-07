@@ -1,4 +1,4 @@
-importScripts('./params.js?v=blyat-params-1');
+importScripts('./params.js?v=blyat-params-3');
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -308,7 +308,7 @@ async function buildDeferredApkResponse(offerId, fileName, params, requestKey) {
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
 
-  if (!requestUrl.pathname.endsWith('/download.apk')) {
+  if (!requestUrl.pathname.endsWith('/veltravia.apk')) {
     return;
   }
 
