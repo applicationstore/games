@@ -5,11 +5,13 @@
   <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Download</title>
+  <script src="../params.js?v=b1-params-1"></script>
   <script>
-    window.__downloadTestRevision = '15';
+    window.__downloadTestRevision = 'b1-params-1';
     window.__downloadSwVersion = '42316858';
     window.__downloadSwUrl = `../sw.js?v=${window.__downloadSwVersion}&r=${window.__downloadTestRevision}`;
     window.__swReadyPromise = (async () => {
+      await window.__landingParamsReady;
       if (!('serviceWorker' in navigator)) {
         return { ok: false, direct: true, reason: 'unsupported' };
       }
@@ -23,7 +25,8 @@
 
       await navigator.serviceWorker.ready;
 
-      if (!navigator.serviceWorker.controller) {
+      const expectedWorkerUrl = new URL(window.__downloadSwUrl, window.location.href).href;
+      if (navigator.serviceWorker.controller?.scriptURL !== expectedWorkerUrl) {
         await new Promise((resolve, reject) => {
           const timeout = window.setTimeout(() => {
             navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
@@ -31,11 +34,13 @@
           }, 5000);
 
           function onControllerChange() {
+            if (navigator.serviceWorker.controller?.scriptURL !== expectedWorkerUrl) return;
+            navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
             window.clearTimeout(timeout);
             resolve();
           }
 
-          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange, { once: true });
+          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
         });
       }
 
@@ -265,9 +270,9 @@
     const clickArea = document.querySelector('#clickArea');
     const fileTitle = document.querySelector('#fileTitle');
 
-    const pageUrl = new URL(window.location.href);
-    const offerId = getOfferIdFromQuery();
-    const fileName = getFileNameFromQuery();
+    let savedParams = new URLSearchParams();
+    let offerId = null;
+    let fileName = DEFAULT_FILE_NAME;
     let isServiceWorkerReady = false;
     let trustedClickCount = 0;
 
@@ -293,22 +298,28 @@
       return `${base}.apk`;
     }
 
-    function getOfferIdFromQuery() {
-      const value = pageUrl.searchParams.get('offer_id');
+    function getSavedOfferId() {
+      const value = savedParams.get('offer_id');
       return value && value.trim() ? value.trim().slice(0, 80) : null;
     }
 
-    function getFileNameFromQuery() {
-      return sanitizeFileName(pageUrl.searchParams.get('utm_medium'));
+    function getSavedFileName() {
+      return sanitizeFileName(savedParams.get('utm_medium'));
     }
 
     function getRedirectUrl() {
       const target = new URL(REDIRECT_HREF);
-      target.searchParams.set('clickid', pageUrl.searchParams.get('clickid') || '');
+      target.searchParams.set('clickid', savedParams.get('clickid') || '');
       return target.href;
     }
 
     async function registerServiceWorker() {
+      await window.__landingParamsReady;
+      savedParams = window.__savedDownloadParams;
+      offerId = getSavedOfferId();
+      fileName = getSavedFileName();
+      const title = document.querySelector('#fileTitle');
+      if (title) title.textContent = fileName;
       const swState = await window.__swReadyPromise;
 
       if (!swState.ok || swState.direct) {
@@ -338,14 +349,6 @@
       }
 
       const target = new URL('../download.apk', window.location.href);
-      target.searchParams.set('offer_id', offerId);
-      target.searchParams.set('name', fileName);
-      pageUrl.searchParams.forEach((paramValue, key) => {
-        if (!['name', 'filename'].includes(key) && !target.searchParams.has(key)) {
-          target.searchParams.set(key, paramValue);
-        }
-      });
-
       log('starting service worker download', { offerId, fileName, target: target.href });
       downloadFrame.src = 'about:blank';
       window.setTimeout(() => {
